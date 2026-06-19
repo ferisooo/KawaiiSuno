@@ -2,6 +2,11 @@
 
 Newest first, grouped by day. Short notes only.
 
+## 2026-06-19 — v1.3.9
+- Added: **3-band Equalizer + presets** in Settings (Bass/Mid/Treble, -12..+12 dB;
+  Flat, Bass boost, Vocal, Treble, Warm, Lo-fi). The visualizer reflects it since
+  the analyser sits after the EQ in the audio graph.
+
 ## 2026-06-19 — v1.3.8
 - Fixed: the **seek bar and volume now support click *and* drag** (drag-to-scrub),
   not just click.

@@ -670,3 +670,18 @@ body::after {
 .set-val { width: 42px; text-align: right; font-size: 12.5px; color: var(--lemon); font-variant-numeric: tabular-nums; }
 .toggle { cursor: pointer; border: 1px solid var(--line); border-radius: 999px; padding: 6px 16px; background: rgba(255,255,255,0.05); color: var(--muted); font-family: var(--body); font-weight: 700; font-size: 12px; transition: all .2s ease; }
 .toggle.on { color: #2a0d1f; border-color: transparent; background: linear-gradient(135deg, var(--hotpink), var(--lemon)); box-shadow: 0 4px 14px rgba(255,93,143,0.45); }
+
+/* EQ (3-band + presets) in the settings modal */
+.set-eq { padding: 12px 0 2px; border-top: 1px solid var(--line); }
+.eq-presets { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0 12px; }
+.eq-preset {
+  cursor: pointer; border: 1px solid var(--line); border-radius: 999px; padding: 5px 12px;
+  background: rgba(255,255,255,0.05); color: var(--muted); font-family: var(--body); font-weight: 600; font-size: 11.5px;
+  transition: transform .14s ease, background .2s ease, color .2s ease, box-shadow .2s ease;
+}
+.eq-preset:hover { transform: translateY(-1px); color: #fff; background: rgba(255,93,143,0.22); box-shadow: 0 0 14px rgba(255,93,143,0.3); }
+.eq-bands { display: flex; flex-direction: column; gap: 10px; }
+.eq-band { display: flex; align-items: center; gap: 12px; }
+.eq-band-label { width: 52px; font-size: 12.5px; color: var(--cloud); font-weight: 600; }
+.eq-band .set-range { flex: 1; width: auto; }
+.eq-band-val { width: 54px; text-align: right; font-size: 12px; color: var(--lemon); font-variant-numeric: tabular-nums; }

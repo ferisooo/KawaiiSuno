@@ -81,6 +81,15 @@ function TrackRow({ track, index, active, playing, onPlay, onMenu, selectable, c
 }
 
 const REPEAT_MODES = ['off', 'all', 'one'];
+const EQ_PRESETS = {
+  Flat: { low: 0, mid: 0, high: 0 },
+  'Bass boost': { low: 7, mid: 0, high: 1 },
+  Vocal: { low: -2, mid: 5, high: 1 },
+  Treble: { low: 0, mid: 0, high: 7 },
+  Warm: { low: 4, mid: 1, high: -3 },
+  'Lo-fi': { low: 3, mid: -2, high: -6 },
+};
+const EQ_BANDS = [['low', 'Bass'], ['mid', 'Mid'], ['high', 'Treble']];
 
 /* ===================== app ===================== */
 function App() {
@@ -113,13 +122,13 @@ function App() {
   const [actionsOpen, setActionsOpen] = useState(false);           // library: import/backup/restore dropdown
   const [bigViz, setBigViz] = useState(false);                     // now-playing: hide art, enlarge visualizer
   const [search, setSearch] = useState('');                        // library: realtime song search
-  const [settings, setSettings] = useState({ effects: 1, remember: true, sort: 'added-desc', favorites: [], playStats: {} });
+  const [settings, setSettings] = useState({ effects: 1, remember: true, sort: 'added-desc', favorites: [], playStats: {}, eq: { low: 0, mid: 0, high: 0 } });
   const [showSettings, setShowSettings] = useState(false);
   const [favOnly, setFavOnly] = useState(false);
 
   const audioRef = useRef(null), sunoRef = useRef(null), webviewRef = useRef(null);
   const urlCache = useRef(new Map()), vizRef = useRef(null), seekRef = useRef(null), volRef = useRef(null);
-  const audioCtxRef = useRef(null), analyserRef = useRef(null);
+  const audioCtxRef = useRef(null), analyserRef = useRef(null), eqRef = useRef(null);
   const queueRef = useRef([]), idxRef = useRef(-1);
   const repeatRef = useRef('off'), shuffleRef = useRef(false);
   useEffect(() => { repeatRef.current = repeat; }, [repeat]);
@@ -143,7 +152,7 @@ function App() {
     (async () => {
       try {
         const s = (api.getSettings && await api.getSettings()) || {};
-        const merged = { effects: 1, remember: true, sort: 'added-desc', favorites: [], playStats: {}, ...s };
+        const merged = { effects: 1, remember: true, sort: 'added-desc', favorites: [], playStats: {}, eq: { low: 0, mid: 0, high: 0 }, ...s };
         settingsRef.current = merged; setSettings(merged);
         document.documentElement.style.setProperty('--fx', String(merged.effects));
         if (merged.remember && merged.session) {
@@ -183,8 +192,25 @@ function App() {
   }, []);
   function ensureAnalyser() {
     if (analyserRef.current) return;
-    try { const Ctx = window.AudioContext || window.webkitAudioContext; const ctx = new Ctx(); const src = ctx.createMediaElementSource(audioRef.current); const an = ctx.createAnalyser(); an.fftSize = 1024; an.smoothingTimeConstant = 0.82; src.connect(an); an.connect(ctx.destination); audioCtxRef.current = ctx; analyserRef.current = an; } catch {}
+    try {
+      const Ctx = window.AudioContext || window.webkitAudioContext; const ctx = new Ctx();
+      const src = ctx.createMediaElementSource(audioRef.current);
+      const an = ctx.createAnalyser(); an.fftSize = 1024; an.smoothingTimeConstant = 0.82;
+      const eq = settingsRef.current.eq || { low: 0, mid: 0, high: 0 };
+      const low = ctx.createBiquadFilter(); low.type = 'lowshelf'; low.frequency.value = 250; low.gain.value = eq.low || 0;
+      const mid = ctx.createBiquadFilter(); mid.type = 'peaking'; mid.frequency.value = 1100; mid.Q.value = 0.9; mid.gain.value = eq.mid || 0;
+      const high = ctx.createBiquadFilter(); high.type = 'highshelf'; high.frequency.value = 4500; high.gain.value = eq.high || 0;
+      src.connect(low); low.connect(mid); mid.connect(high); high.connect(an); an.connect(ctx.destination);
+      audioCtxRef.current = ctx; analyserRef.current = an; eqRef.current = { low, mid, high };
+    } catch {}
   }
+  // apply EQ gains live as they change (the analyser sits after the EQ, so the
+  // visualizer reflects it too)
+  useEffect(() => {
+    const e = eqRef.current; if (!e) return;
+    const eq = settings.eq || {};
+    try { e.low.gain.value = eq.low || 0; e.mid.gain.value = eq.mid || 0; e.high.gain.value = eq.high || 0; } catch {}
+  }, [settings.eq]);
 
   /* ---- visualizer (only animates while playing; idle = flat, no loop) ---- */
   useEffect(() => {
@@ -577,6 +603,25 @@ function App() {
             <div className="set-row">
               <div className="set-label"><div className="set-title">Remember settings</div><div className="set-sub">restore volume, shuffle, repeat & tab on launch</div></div>
               <button className={'toggle' + (settings.remember ? ' on' : '')} onClick={() => updateSettings({ remember: !settings.remember })}>{settings.remember ? 'On' : 'Off'}</button>
+            </div>
+            <div className="set-eq">
+              <div className="set-label"><div className="set-title">Equalizer</div><div className="set-sub">shapes the sound (and the visualizer follows it)</div></div>
+              <div className="eq-presets">
+                {Object.keys(EQ_PRESETS).map((name) => <button key={name} className="eq-preset" onClick={() => updateSettings({ eq: EQ_PRESETS[name] })}>{name}</button>)}
+              </div>
+              <div className="eq-bands">
+                {EQ_BANDS.map(([k, label]) => {
+                  const val = (settings.eq || {})[k] || 0;
+                  return (
+                    <div key={k} className="eq-band">
+                      <span className="eq-band-label">{label}</span>
+                      <input className="set-range" type="range" min="-12" max="12" step="1" value={val}
+                             onChange={(e) => updateSettings({ eq: { ...(settingsRef.current.eq || { low: 0, mid: 0, high: 0 }), [k]: parseInt(e.target.value, 10) } })} />
+                      <span className="eq-band-val">{val > 0 ? '+' : ''}{val} dB</span>
+                    </div>
+                  );
+                })}
+              </div>
             </div>
           </div>
         </div>
