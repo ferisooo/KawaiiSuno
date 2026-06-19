@@ -1332,7 +1332,7 @@ Make sure your DeepSeek API key is set above (\u{1F511}).`);
         if (!an) return;
         if (!data || data.length !== an.frequencyBinCount) data = new Uint8Array(an.frequencyBinCount);
         an.getByteFrequencyData(data);
-        const span = bigViz ? 460 : 240;
+        const span = bigViz ? 260 : 130;
         const n = bars.length, bins = data.length;
         const minB = 2, maxB = Math.max(minB + 1, Math.floor(bins * 0.66));
         const ratio = maxB / minB;

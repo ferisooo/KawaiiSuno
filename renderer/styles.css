@@ -279,9 +279,7 @@ body::after {
 @keyframes floaty { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-10px)} }
 @keyframes spin { to { transform: rotate(360deg); } }
 
-.now-meta { min-width: 0; position: relative; }
-/* keep the text readable as the bars climb up behind it (underlay) */
-.now-kicker, .now-title, .now-sub { position: relative; z-index: 2; }
+.now-meta { min-width: 0; }
 .now-kicker { font-size: 12px; letter-spacing: 2px; text-transform: uppercase; color: var(--lemon); font-weight: 700; text-shadow: 0 0 14px rgba(255,206,71,0.6); animation: kickerglow 3s ease-in-out infinite; }
 @keyframes kickerglow { 0%,100% { text-shadow: 0 0 12px rgba(255,206,71,0.5); } 50% { text-shadow: 0 0 22px rgba(255,206,71,0.9), 0 0 8px rgba(255,93,143,0.5); } }
 .now-title {
@@ -296,8 +294,8 @@ body::after {
 }
 .now-sub { color: var(--muted); font-size: 14px; }
 
-/* live visualizer — bars overflow upward (behind the title) instead of being capped */
-.viz { display: flex; gap: 5px; align-items: flex-end; height: 140px; margin-top: 22px; padding: 0 2px; position: relative; z-index: 1; }
+/* live visualizer */
+.viz { display: flex; gap: 5px; align-items: flex-end; height: 140px; margin-top: 22px; padding: 0 2px; }
 .viz span {
   flex: 1; min-width: 4px; border-radius: 8px 8px 3px 3px; height: 8px;
   background: linear-gradient(180deg, var(--lemon), var(--hotpink));

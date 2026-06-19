@@ -251,7 +251,7 @@ function App() {
       const an = analyserRef.current; if (!an) return;
       if (!data || data.length !== an.frequencyBinCount) data = new Uint8Array(an.frequencyBinCount);
       an.getByteFrequencyData(data);
-      const span = bigViz ? 460 : 240;   // bars can climb up behind the title (it sits on top as an overlay)
+      const span = bigViz ? 260 : 130;   // taller bars when the visualizer is enlarged
       // Map bars across the spectrum on a LOG scale (how we hear pitch) so every bar
       // covers a real frequency band — otherwise all the energy piles into the low
       // bins and the right-hand bars never move. Take each band's peak, lift the

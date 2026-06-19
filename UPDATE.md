@@ -2,6 +2,10 @@
 
 Newest first, grouped by day. Short notes only.
 
+## 2026-06-19 — v1.3.14
+- Reverted: the taller "bars rise behind the title" change — bars were going too
+  high and covering everything. Back to the original capped height.
+
 ## 2026-06-19 — v1.3.13
 - Changed: **visualizer bars are no longer capped low** — they climb much higher
   and pass *behind* the song title / "NOW PLAYING" / subtitle as an underlay
