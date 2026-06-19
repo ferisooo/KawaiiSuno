@@ -14,21 +14,33 @@ function useCosmetics() {
     let raf; const COLORS = ['#ff5d8f', '#ffce47', '#ff86b3', '#e6ad1f'];
     function size() { for (const c of [pcv, tcv]) { c.width = innerWidth; c.height = innerHeight; } }
     size(); addEventListener('resize', size);
-    const parts = Array.from({ length: 52 }, () => ({ x: Math.random() * innerWidth, y: Math.random() * innerHeight, r: 1 + Math.random() * 3, vx: (Math.random() - 0.5) * 0.35, vy: -0.2 - Math.random() * 0.5, a: 0.25 + Math.random() * 0.55, c: COLORS[(Math.random() * COLORS.length) | 0] }));
-    let trail = [];
-    const onMove = (e) => { trail.push({ x: e.clientX, y: e.clientY, life: 1 }); if (trail.length > 28) trail.shift(); };
+    // particle count scales with screen area, capped so big monitors stay smooth
+    const COUNT = Math.max(24, Math.min(46, Math.round(innerWidth * innerHeight / 26000)));
+    const parts = Array.from({ length: COUNT }, () => ({ x: Math.random() * innerWidth, y: Math.random() * innerHeight, r: 1 + Math.random() * 3, vx: (Math.random() - 0.5) * 0.35, vy: -0.2 - Math.random() * 0.5, a: 0.25 + Math.random() * 0.55, c: COLORS[(Math.random() * COLORS.length) | 0] }));
+    let trail = [], trailDirty = false;
+    const onMove = (e) => { trail.push({ x: e.clientX, y: e.clientY, life: 1 }); if (trail.length > 26) trail.shift(); };
     addEventListener('mousemove', onMove);
     const onClick = (e) => { const r = document.createElement('div'); r.className = 'ripple'; r.style.left = e.clientX + 'px'; r.style.top = e.clientY + 'px'; r.style.width = r.style.height = '230px'; document.body.appendChild(r); setTimeout(() => r.remove(), 660); };
     addEventListener('click', onClick);
-    function loop() {
+    const FRAME = 1000 / 60; let last = 0;
+    function loop(now) {
+      raf = requestAnimationFrame(loop);
+      if (document.hidden) return;                  // no work when the window isn't visible
+      if (now - last < FRAME - 1) return;           // cap to ~60fps (cheaper on 120/144Hz panels)
+      last = now;
       pctx.clearRect(0, 0, pcv.width, pcv.height);
       for (const p of parts) { p.x += p.vx; p.y += p.vy; if (p.y < -10) { p.y = innerHeight + 10; p.x = Math.random() * innerWidth; } if (p.x < -10) p.x = innerWidth + 10; if (p.x > innerWidth + 10) p.x = -10; pctx.globalAlpha = p.a; pctx.fillStyle = p.c; pctx.beginPath(); pctx.arc(p.x, p.y, p.r, 0, 7); pctx.fill(); }
       pctx.globalAlpha = 1;
-      tctx.clearRect(0, 0, tcv.width, tcv.height);
-      for (let i = 0; i < trail.length; i++) { const t = trail[i]; t.life *= 0.92; const rr = (i / trail.length) * 7 + 1; tctx.globalAlpha = t.life * 0.6; tctx.fillStyle = i % 2 ? '#ffce47' : '#ff5d8f'; tctx.beginPath(); tctx.arc(t.x, t.y, rr, 0, 7); tctx.fill(); }
-      tctx.globalAlpha = 1; raf = requestAnimationFrame(loop);
+      // cursor trail — drop faded points so drawing stops once the mouse rests
+      if (trail.length) {
+        for (const t of trail) t.life *= 0.9;
+        trail = trail.filter((t) => t.life > 0.06);
+        tctx.clearRect(0, 0, tcv.width, tcv.height);
+        for (let i = 0; i < trail.length; i++) { const t = trail[i]; const rr = (i / trail.length) * 7 + 1; tctx.globalAlpha = t.life * 0.6; tctx.fillStyle = i % 2 ? '#ffce47' : '#ff5d8f'; tctx.beginPath(); tctx.arc(t.x, t.y, rr, 0, 7); tctx.fill(); }
+        tctx.globalAlpha = 1; trailDirty = true;
+      } else if (trailDirty) { tctx.clearRect(0, 0, tcv.width, tcv.height); trailDirty = false; }
     }
-    loop();
+    raf = requestAnimationFrame(loop);
     return () => { cancelAnimationFrame(raf); removeEventListener('resize', size); removeEventListener('mousemove', onMove); removeEventListener('click', onClick); };
   }, []);
 }
@@ -130,16 +142,22 @@ function App() {
     try { const Ctx = window.AudioContext || window.webkitAudioContext; const ctx = new Ctx(); const src = ctx.createMediaElementSource(audioRef.current); const an = ctx.createAnalyser(); an.fftSize = 128; src.connect(an); an.connect(ctx.destination); audioCtxRef.current = ctx; analyserRef.current = an; } catch {}
   }
 
-  /* ---- visualizer ---- */
+  /* ---- visualizer (only animates while playing; idle = flat, no loop) ---- */
   useEffect(() => {
-    let raf;
-    const draw = () => {
-      const bars = vizRef.current ? vizRef.current.children : []; const an = analyserRef.current;
-      if (an && playing) { const data = new Uint8Array(an.frequencyBinCount); an.getByteFrequencyData(data); for (let i = 0; i < bars.length; i++) bars[i].style.height = (10 + (data[i % data.length] / 255) * 130) + 'px'; }
-      else { for (let i = 0; i < bars.length; i++) bars[i].style.height = '8px'; }   // resting flat when nothing plays
+    const bars = vizRef.current ? vizRef.current.children : [];
+    if (!playing) { for (let i = 0; i < bars.length; i++) bars[i].style.height = '8px'; return; }
+    let raf, data = null; const FRAME = 1000 / 60; let last = 0;
+    const draw = (now) => {
       raf = requestAnimationFrame(draw);
+      if (document.hidden || now - last < FRAME - 1) return;
+      last = now;
+      const an = analyserRef.current; if (!an) return;
+      if (!data || data.length !== an.frequencyBinCount) data = new Uint8Array(an.frequencyBinCount);
+      an.getByteFrequencyData(data);
+      for (let i = 0; i < bars.length; i++) bars[i].style.height = (10 + (data[i % data.length] / 255) * 130) + 'px';
     };
-    draw(); return () => cancelAnimationFrame(raf);
+    raf = requestAnimationFrame(draw);
+    return () => cancelAnimationFrame(raf);
   }, [playing]);
 
   /* ---- lyrics auto-scroll with progress ---- */

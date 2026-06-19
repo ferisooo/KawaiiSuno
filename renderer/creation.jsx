@@ -415,7 +415,7 @@ export function CreationTab() {
 
   /* ---------------- sparkles (memoised) ---------------- */
   const sparkles = useMemo(
-    () => Array.from({ length: 34 }, () => ({
+    () => Array.from({ length: 22 }, () => ({
       ch: SPARKLE_CHARS[Math.floor(Math.random() * SPARKLE_CHARS.length)],
       left: Math.random() * 100,
       size: 9 + Math.random() * 14,
@@ -649,7 +649,7 @@ const CSS = `
     linear-gradient(160deg, #1a0c16 0%, #120810 45%, #0a0610 100%);
 }
 .orb{position:absolute; border-radius:50%; filter:blur(70px); opacity:.5;
-  animation:slf-drift 18s ease-in-out infinite;}
+  will-change:transform; animation:slf-drift 18s ease-in-out infinite;}
 .orb-a{width:420px;height:420px;background:#9e2c66;top:-120px;left:-80px;}
 .orb-b{width:380px;height:380px;background:#b58334;bottom:-100px;right:-60px;animation-delay:-6s;}
 .orb-c{width:300px;height:300px;background:#ae2f6a;top:40%;left:55%;animation-delay:-11s;opacity:.35;}
@@ -696,7 +696,7 @@ const CSS = `
 /* ---- glass cards ---- */
 .card{position:relative; background:var(--panel);
   border:1px solid var(--border); border-radius:20px; padding:18px;
-  backdrop-filter:blur(16px) saturate(1.3); -webkit-backdrop-filter:blur(16px) saturate(1.3);
+  backdrop-filter:blur(10px) saturate(1.3); -webkit-backdrop-filter:blur(10px) saturate(1.3);
   box-shadow:0 10px 40px rgba(8,3,12,.5), inset 0 1px 0 rgba(255,255,255,.06),
     0 0 0 1px rgba(255,93,143,.04);
   animation:slf-rise .7s cubic-bezier(.2,.9,.3,1) both;}

@@ -2,6 +2,19 @@
 
 Newest first. Short notes only.
 
+## v1.3.2 — 2026-06-19
+- Perf: targeted optimizations for a steady 60fps.
+  - Visualizer now only animates **while a song plays** (it used to run a loop
+    forever, writing to 28 bars every frame even when idle).
+  - Particle + cursor-trail canvases are **capped to 60fps** (was uncapped, so it
+    over-rendered on 120/144Hz screens), **pause when the window is hidden**, scale
+    the particle count to the screen, and the trail stops drawing once the mouse
+    rests instead of redrawing faded dots forever.
+  - Lighter **backdrop blur** on the panels/titlebar and the Create-tab cards, and
+    the animated background + glow orbs are promoted to their own GPU layer so the
+    heavy blur is rasterized once instead of every frame.
+  - Fewer Create-tab sparkles.
+
 ## v1.3.1 — 2026-06-19
 - Fixed: **tab labels getting cut off** — with four tabs they now wrap to a tidy
   2×2 grid so each has room (no clipping on the active tab).

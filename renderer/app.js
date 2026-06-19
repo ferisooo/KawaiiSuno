@@ -579,7 +579,7 @@ Make sure your DeepSeek API key is set above (\u{1F511}).`);
       setStatus("history cleared");
     };
     const sparkles = useMemo(
-      () => Array.from({ length: 34 }, () => ({
+      () => Array.from({ length: 22 }, () => ({
         ch: SPARKLE_CHARS[Math.floor(Math.random() * SPARKLE_CHARS.length)],
         left: Math.random() * 100,
         size: 9 + Math.random() * 14,
@@ -733,7 +733,7 @@ Make sure your DeepSeek API key is set above (\u{1F511}).`);
     linear-gradient(160deg, #1a0c16 0%, #120810 45%, #0a0610 100%);
 }
 .orb{position:absolute; border-radius:50%; filter:blur(70px); opacity:.5;
-  animation:slf-drift 18s ease-in-out infinite;}
+  will-change:transform; animation:slf-drift 18s ease-in-out infinite;}
 .orb-a{width:420px;height:420px;background:#9e2c66;top:-120px;left:-80px;}
 .orb-b{width:380px;height:380px;background:#b58334;bottom:-100px;right:-60px;animation-delay:-6s;}
 .orb-c{width:300px;height:300px;background:#ae2f6a;top:40%;left:55%;animation-delay:-11s;opacity:.35;}
@@ -780,7 +780,7 @@ Make sure your DeepSeek API key is set above (\u{1F511}).`);
 /* ---- glass cards ---- */
 .card{position:relative; background:var(--panel);
   border:1px solid var(--border); border-radius:20px; padding:18px;
-  backdrop-filter:blur(16px) saturate(1.3); -webkit-backdrop-filter:blur(16px) saturate(1.3);
+  backdrop-filter:blur(10px) saturate(1.3); -webkit-backdrop-filter:blur(10px) saturate(1.3);
   box-shadow:0 10px 40px rgba(8,3,12,.5), inset 0 1px 0 rgba(255,255,255,.06),
     0 0 0 1px rgba(255,93,143,.04);
   animation:slf-rise .7s cubic-bezier(.2,.9,.3,1) both;}
@@ -979,11 +979,12 @@ Make sure your DeepSeek API key is set above (\u{1F511}).`);
       }
       size();
       addEventListener("resize", size);
-      const parts = Array.from({ length: 52 }, () => ({ x: Math.random() * innerWidth, y: Math.random() * innerHeight, r: 1 + Math.random() * 3, vx: (Math.random() - 0.5) * 0.35, vy: -0.2 - Math.random() * 0.5, a: 0.25 + Math.random() * 0.55, c: COLORS[Math.random() * COLORS.length | 0] }));
-      let trail = [];
+      const COUNT = Math.max(24, Math.min(46, Math.round(innerWidth * innerHeight / 26e3)));
+      const parts = Array.from({ length: COUNT }, () => ({ x: Math.random() * innerWidth, y: Math.random() * innerHeight, r: 1 + Math.random() * 3, vx: (Math.random() - 0.5) * 0.35, vy: -0.2 - Math.random() * 0.5, a: 0.25 + Math.random() * 0.55, c: COLORS[Math.random() * COLORS.length | 0] }));
+      let trail = [], trailDirty = false;
       const onMove = (e) => {
         trail.push({ x: e.clientX, y: e.clientY, life: 1 });
-        if (trail.length > 28) trail.shift();
+        if (trail.length > 26) trail.shift();
       };
       addEventListener("mousemove", onMove);
       const onClick = (e) => {
@@ -996,7 +997,13 @@ Make sure your DeepSeek API key is set above (\u{1F511}).`);
         setTimeout(() => r.remove(), 660);
       };
       addEventListener("click", onClick);
-      function loop() {
+      const FRAME = 1e3 / 60;
+      let last = 0;
+      function loop(now) {
+        raf = requestAnimationFrame(loop);
+        if (document.hidden) return;
+        if (now - last < FRAME - 1) return;
+        last = now;
         pctx.clearRect(0, 0, pcv.width, pcv.height);
         for (const p of parts) {
           p.x += p.vx;
@@ -1014,21 +1021,27 @@ Make sure your DeepSeek API key is set above (\u{1F511}).`);
           pctx.fill();
         }
         pctx.globalAlpha = 1;
-        tctx.clearRect(0, 0, tcv.width, tcv.height);
-        for (let i = 0; i < trail.length; i++) {
-          const t = trail[i];
-          t.life *= 0.92;
-          const rr = i / trail.length * 7 + 1;
-          tctx.globalAlpha = t.life * 0.6;
-          tctx.fillStyle = i % 2 ? "#ffce47" : "#ff5d8f";
-          tctx.beginPath();
-          tctx.arc(t.x, t.y, rr, 0, 7);
-          tctx.fill();
+        if (trail.length) {
+          for (const t of trail) t.life *= 0.9;
+          trail = trail.filter((t) => t.life > 0.06);
+          tctx.clearRect(0, 0, tcv.width, tcv.height);
+          for (let i = 0; i < trail.length; i++) {
+            const t = trail[i];
+            const rr = i / trail.length * 7 + 1;
+            tctx.globalAlpha = t.life * 0.6;
+            tctx.fillStyle = i % 2 ? "#ffce47" : "#ff5d8f";
+            tctx.beginPath();
+            tctx.arc(t.x, t.y, rr, 0, 7);
+            tctx.fill();
+          }
+          tctx.globalAlpha = 1;
+          trailDirty = true;
+        } else if (trailDirty) {
+          tctx.clearRect(0, 0, tcv.width, tcv.height);
+          trailDirty = false;
         }
-        tctx.globalAlpha = 1;
-        raf = requestAnimationFrame(loop);
       }
-      loop();
+      raf = requestAnimationFrame(loop);
       return () => {
         cancelAnimationFrame(raf);
         removeEventListener("resize", size);
@@ -1156,20 +1169,25 @@ Make sure your DeepSeek API key is set above (\u{1F511}).`);
       }
     }
     useEffect2(() => {
-      let raf;
-      const draw = () => {
-        const bars = vizRef.current ? vizRef.current.children : [];
-        const an = analyserRef.current;
-        if (an && playing) {
-          const data = new Uint8Array(an.frequencyBinCount);
-          an.getByteFrequencyData(data);
-          for (let i = 0; i < bars.length; i++) bars[i].style.height = 10 + data[i % data.length] / 255 * 130 + "px";
-        } else {
-          for (let i = 0; i < bars.length; i++) bars[i].style.height = "8px";
-        }
+      const bars = vizRef.current ? vizRef.current.children : [];
+      if (!playing) {
+        for (let i = 0; i < bars.length; i++) bars[i].style.height = "8px";
+        return;
+      }
+      let raf, data = null;
+      const FRAME = 1e3 / 60;
+      let last = 0;
+      const draw = (now) => {
         raf = requestAnimationFrame(draw);
+        if (document.hidden || now - last < FRAME - 1) return;
+        last = now;
+        const an = analyserRef.current;
+        if (!an) return;
+        if (!data || data.length !== an.frequencyBinCount) data = new Uint8Array(an.frequencyBinCount);
+        an.getByteFrequencyData(data);
+        for (let i = 0; i < bars.length; i++) bars[i].style.height = 10 + data[i % data.length] / 255 * 130 + "px";
       };
-      draw();
+      raf = requestAnimationFrame(draw);
       return () => cancelAnimationFrame(raf);
     }, [playing]);
     const lyricLines = current && current.lyrics ? String(current.lyrics).split(/\n+/).map((l) => l.trim()).filter(Boolean) : [];
