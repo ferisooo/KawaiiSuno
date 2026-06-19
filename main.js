@@ -38,7 +38,7 @@ function notify(msg, err) { if (mainWindow && !mainWindow.isDestroyed()) mainWin
 function importTrack(t, playlistId) {
   if (!t || !t.id) return;
   if (!state.tracks.some((x) => x.id === t.id)) {
-    state.tracks.push({ id: t.id, title: t.title || 'Suno song', audioUrl: t.audioUrl || null, cover: t.cover || null, lyrics: t.lyrics || null, source: 'suno' });
+    state.tracks.push({ id: t.id, title: t.title || 'Suno song', audioUrl: t.audioUrl || null, cover: t.cover || null, lyrics: t.lyrics || null, source: 'suno', addedAt: Date.now() });
   }
   if (playlistId) {
     const p = state.playlists.find((p) => p.id === playlistId);
@@ -77,6 +77,10 @@ ipcMain.on('window:minimize', () => mainWindow && mainWindow.minimize());
 ipcMain.on('window:maximize', () => { if (mainWindow) mainWindow.isMaximized() ? mainWindow.unmaximize() : mainWindow.maximize(); });
 ipcMain.on('window:close', () => mainWindow && mainWindow.close());
 ipcMain.on('open:external', (_e, url) => { if (/^https?:\/\//i.test(url)) shell.openExternal(url); });
+
+/* ===================== settings (prefs / sort / favorites) ===================== */
+ipcMain.handle('settings:get', () => readConfig().settings || {});
+ipcMain.handle('settings:set', (_e, patch) => { const c = readConfig(); c.settings = Object.assign({}, c.settings, patch || {}); writeConfig(c); return c.settings; });
 
 /* ===================== state IPC ===================== */
 ipcMain.handle('state:get', () => state);

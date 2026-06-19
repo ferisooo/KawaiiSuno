@@ -46,7 +46,7 @@ function useCosmetics() {
 }
 
 /* ===================== titlebar ===================== */
-function TitleBar() {
+function TitleBar({ onSettings }) {
   const [max, setMax] = useState(false);
   useEffect(() => { api.onMaximizeState && api.onMaximizeState(setMax); }, []);
   return (
@@ -54,6 +54,7 @@ function TitleBar() {
       <div className="brand"><span className="heart">♥</span> Suno Kawaii Player</div>
       <button className="social-link" title="Feris socials — mez.ink/ferisooo" onClick={() => api.openExternal('https://mez.ink/ferisooo')}>🔗 feris socials</button>
       <div className="spacer" />
+      <button className="win-btn" title="Settings" onClick={onSettings}>⚙</button>
       <div className="win-btns">
         <button className="win-btn" title="Minimize" onClick={() => api.minimize()}>—</button>
         <button className="win-btn" title="Maximize" onClick={() => api.maximize()}>{max ? '❐' : '▢'}</button>
@@ -64,16 +65,17 @@ function TitleBar() {
 }
 
 /* ===================== track row ===================== */
-function TrackRow({ track, index, active, playing, onPlay, onMenu, selectable, checked, onToggle }) {
+function TrackRow({ track, index, active, playing, onPlay, onMenu, selectable, checked, onToggle, fav, onFav }) {
   return (
-    <div className={'track' + (active ? ' active' : '') + (checked ? ' picked' : '')} style={{ animationDelay: Math.min(index * 0.035, 0.5) + 's' }}
+    <div className={'track' + (active ? ' active' : '') + (checked ? ' picked' : '')}
          onClick={onPlay} onContextMenu={onMenu}>
       {selectable && <div className={'chk' + (checked ? ' on' : '')} onClick={(e) => { e.stopPropagation(); onToggle(); }}>{checked ? '✓' : ''}</div>}
       {track.cover
         ? <img className="thumb" src={track.cover} alt="" onError={(e) => { e.target.style.display = 'none'; }} />
         : <div className="tnum">{active && playing ? <div className="eqbars"><span/><span/><span/><span/></div> : GLYPHS[index % GLYPHS.length]}</div>}
       <div className="tmeta"><div className="tname">{track.title}</div><div className="tsrc">🌹 Suno</div></div>
-      {active && playing && track.cover && <div className="eqbars" style={{ marginLeft: 'auto' }}><span/><span/><span/><span/></div>}
+      {active && playing && track.cover && <div className="eqbars"><span/><span/><span/><span/></div>}
+      <button className={'fav-btn' + (fav ? ' on' : '')} title={fav ? 'Unfavorite' : 'Favorite'} onClick={(e) => { e.stopPropagation(); onFav(); }}>{fav ? '❤' : '♡'}</button>
     </div>
   );
 }
@@ -111,9 +113,12 @@ function App() {
   const [actionsOpen, setActionsOpen] = useState(false);           // library: import/backup/restore dropdown
   const [bigViz, setBigViz] = useState(false);                     // now-playing: hide art, enlarge visualizer
   const [search, setSearch] = useState('');                        // library: realtime song search
+  const [settings, setSettings] = useState({ effects: 1, remember: true, sort: 'added-desc', favorites: [], playStats: {} });
+  const [showSettings, setShowSettings] = useState(false);
+  const [favOnly, setFavOnly] = useState(false);
 
   const audioRef = useRef(null), sunoRef = useRef(null), webviewRef = useRef(null);
-  const urlCache = useRef(new Map()), vizRef = useRef(null);
+  const urlCache = useRef(new Map()), vizRef = useRef(null), seekRef = useRef(null), volRef = useRef(null);
   const audioCtxRef = useRef(null), analyserRef = useRef(null);
   const queueRef = useRef([]), idxRef = useRef(-1);
   const repeatRef = useRef('off'), shuffleRef = useRef(false);
@@ -122,6 +127,42 @@ function App() {
 
   const flash = (msg, err) => { setToast({ msg, err }); setTimeout(() => setToast(null), err ? 4800 : 2600); };
   const tracksById = buildIdMap(tracks);
+
+  /* ---- settings (persisted via main config; effects/favorites/sort/remember) ---- */
+  const settingsRef = useRef(settings), saveTimer = useRef(null), settingsLoaded = useRef(false);
+  const updateSettings = (patch) => {
+    const next = { ...settingsRef.current, ...patch };
+    settingsRef.current = next; setSettings(next);
+    if (typeof patch.effects === 'number') document.documentElement.style.setProperty('--fx', String(patch.effects));
+    clearTimeout(saveTimer.current);
+    saveTimer.current = setTimeout(() => { try { api.setSettings && api.setSettings(next); } catch {} }, 250);
+  };
+  const toggleFav = (id) => { const s = new Set(settingsRef.current.favorites || []); s.has(id) ? s.delete(id) : s.add(id); updateSettings({ favorites: [...s] }); };
+  const favSet = new Set(settings.favorites || []);
+  useEffect(() => {
+    (async () => {
+      try {
+        const s = (api.getSettings && await api.getSettings()) || {};
+        const merged = { effects: 1, remember: true, sort: 'added-desc', favorites: [], playStats: {}, ...s };
+        settingsRef.current = merged; setSettings(merged);
+        document.documentElement.style.setProperty('--fx', String(merged.effects));
+        if (merged.remember && merged.session) {
+          const ss = merged.session;
+          if (typeof ss.volume === 'number') setVolume(ss.volume);
+          if (typeof ss.shuffle === 'boolean') setShuffle(ss.shuffle);
+          if (ss.repeat) setRepeat(ss.repeat);
+          if (ss.tab === 'library' || ss.tab === 'playlists') setTab(ss.tab);
+        }
+      } catch {}
+      settingsLoaded.current = true;
+    })();
+  }, []);
+  // remember volume / shuffle / repeat / tab between launches (only after the initial load)
+  useEffect(() => {
+    if (!settingsLoaded.current || !settingsRef.current.remember) return;
+    updateSettings({ session: { volume, shuffle, repeat, tab } });
+    // eslint-disable-next-line
+  }, [volume, shuffle, repeat, tab]);
 
   /* ---- state from main ---- */
   useEffect(() => {
@@ -200,6 +241,7 @@ function App() {
     if (idx < 0 || idx >= list.length) return;
     queueRef.current = list; idxRef.current = idx;
     const track = list[idx]; setCurrent(track); setCurId(track.id);
+    updateSettings({ playStats: { ...settingsRef.current.playStats, [track.id]: Date.now() } });
     try { const url = await resolveUrl(track); const a = audioRef.current; a.src = url; ensureAnalyser(); if (audioCtxRef.current && audioCtxRef.current.state === 'suspended') audioCtxRef.current.resume(); await a.play(); setPlaying(true); }
     catch (e) { flash('Couldn\'t play that — ' + e.message, true); setPlaying(false); }
   }, [resolveUrl]);
@@ -227,8 +269,18 @@ function App() {
   const endedRef = useRef(onEnded); useEffect(() => { endedRef.current = onEnded; }, [onEnded]);
   useEffect(() => { if (audioRef.current) audioRef.current.volume = volume; }, [volume]);
 
-  const seek = (e) => { const r = e.currentTarget.getBoundingClientRect(); const p = Math.min(1, Math.max(0, (e.clientX - r.left) / r.width)); if (audioRef.current && duration) audioRef.current.currentTime = p * duration; };
-  const setVol = (e) => { const r = e.currentTarget.getBoundingClientRect(); setVolume(Math.min(1, Math.max(0, (e.clientX - r.left) / r.width))); };
+  // click OR drag to scrub / set volume
+  const fracAt = (el, clientX) => { const r = el.getBoundingClientRect(); return Math.min(1, Math.max(0, (clientX - r.left) / r.width)); };
+  const dragBar = (ref, apply) => (e) => {
+    e.preventDefault();
+    const el = ref.current; if (!el) return;
+    apply(fracAt(el, e.clientX));
+    const move = (ev) => apply(fracAt(el, ev.clientX));
+    const up = () => { window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', up); };
+    window.addEventListener('pointermove', move); window.addEventListener('pointerup', up);
+  };
+  const onSeekDown = dragBar(seekRef, (p) => { if (audioRef.current && duration) { audioRef.current.currentTime = p * duration; setProgress(p * duration); } });
+  const onVolDown = dragBar(volRef, (p) => setVolume(p));
 
   /* ---- suno + import actions ---- */
   const loadSuno = async () => {
@@ -286,22 +338,36 @@ function App() {
 
   const selectable = tab === 'library' || (tab === 'playlists' && curPl);
 
-  // realtime search filter (library only) — recomputed only when query/list/tab change
+  // library: sort, then filter by ❤️ favorites + realtime search. (playlists pass through.)
   const q = search.trim().toLowerCase();
-  const shownList = useMemo(() => (tab === 'library' && q) ? list.filter((t) => (t.title || '').toLowerCase().includes(q)) : list, [tab, q, list]);
+  const libSorted = useMemo(() => {
+    if (tab !== 'library') return list;
+    const ps = settings.playStats || {}, s = settings.sort, a = list.slice();
+    if (s === 'title') a.sort((x, y) => (x.title || '').localeCompare(y.title || ''));
+    else if (s === 'played') a.sort((x, y) => (ps[y.id] || 0) - (ps[x.id] || 0));
+    else if (s === 'added-asc') a.sort((x, y) => (x.addedAt || 0) - (y.addedAt || 0));
+    else a.sort((x, y) => (y.addedAt || 0) - (x.addedAt || 0));
+    return a;
+  }, [tab, list, settings.sort, settings.playStats]);
+  const shownList = useMemo(() => {
+    let r = libSorted;
+    if (tab === 'library' && favOnly) r = r.filter((t) => favSet.has(t.id));
+    if (tab === 'library' && q) r = r.filter((t) => (t.title || '').toLowerCase().includes(q));
+    return r;
+  }, [libSorted, tab, favOnly, q, settings.favorites]);
 
   // Build the rows once and reuse them across playback-progress re-renders, so a
   // 400-song list doesn't reconcile on every tick. (CSS content-visibility skips
   // painting off-screen rows, which keeps scrolling smooth.)
   const listRows = useMemo(() => shownList.map((t, i) => (
     <TrackRow key={t.id} track={t} index={i} active={t.id === curId} playing={playing}
-              onPlay={() => playFrom(shownList, i)} onMenu={openMenu(t)}
+              onPlay={() => playFrom(shownList, i)} onMenu={openMenu(t)} fav={favSet.has(t.id)} onFav={() => toggleFav(t.id)}
               selectable checked={selected.includes(t.id)} onToggle={() => toggleSel(t.id)} />
-  )), [shownList, curId, playing, selected, playFrom]);
+  )), [shownList, curId, playing, selected, playFrom, settings.favorites]);
 
   return (
     <>
-      <TitleBar />
+      <TitleBar onSettings={() => setShowSettings(true)} />
       <button className={'collapse-handle' + (collapsed ? ' collapsed' : '')} title={collapsed ? 'Show list' : 'Hide list'} onClick={() => setCollapsed((c) => !c)}>{collapsed ? '▶' : '◀'}</button>
       <div className={'workspace' + (collapsed ? ' collapsed' : '') + (playing ? ' audio-live' : '')}>
         {/* ---------- sidebar ---------- */}
@@ -319,6 +385,15 @@ function App() {
                 <span className="search-ic">🔍</span>
                 <input className="search-input" value={search} placeholder="Search your songs…" onChange={(e) => setSearch(e.target.value)} />
                 {search && <button className="search-clear" title="Clear" onClick={() => setSearch('')}>✕</button>}
+              </div>
+              <div className="lib-controls">
+                <button className={'fav-filter' + (favOnly ? ' on' : '')} title="Show favorites only" onClick={() => setFavOnly((v) => !v)}>{favOnly ? '❤ favorites' : '♡ favorites'}</button>
+                <select className="sort-select" title="Sort" value={settings.sort} onChange={(e) => updateSettings({ sort: e.target.value })}>
+                  <option value="added-desc">Newest first</option>
+                  <option value="added-asc">Oldest first</option>
+                  <option value="title">Title A–Z</option>
+                  <option value="played">Recently played</option>
+                </select>
               </div>
               <div className="side-head">
                 <div className="side-title">Your songs <small>{q ? shownList.length + ' / ' + tracks.length : tracks.length}</small></div>
@@ -459,7 +534,7 @@ function App() {
           <div className="transport">
             <div className="seek">
               <div className="time">{fmt(progress)}</div>
-              <div className="bar" onClick={seek}><div className="fill" style={{ width: pct + '%' }} /><div className="knob" style={{ left: pct + '%' }} /></div>
+              <div className="bar" ref={seekRef} onPointerDown={onSeekDown}><div className="fill" style={{ width: pct + '%' }} /><div className="knob" style={{ left: pct + '%' }} /></div>
               <div className="time">{fmt(duration)}</div>
             </div>
             <div className="controls">
@@ -468,7 +543,7 @@ function App() {
               <button className="ctl play" title="Play / Pause" onClick={togglePlay}>{playing ? '❚❚' : '►'}</button>
               <button className="ctl" title="Next" onClick={playNext}>⏭</button>
               <button className={'ctl' + (repeatOn ? ' on' : '')} title={'Repeat: ' + repeat} onClick={() => setRepeat((r) => REPEAT_MODES[(REPEAT_MODES.indexOf(r) + 1) % 3])}>🔁{repeat === 'one' && <span className="badge">1</span>}</button>
-              <div className="volwrap"><span style={{ fontSize: 15 }}>{volume === 0 ? '🔇' : volume < 0.5 ? '🔉' : '🔊'}</span><div className="vol" onClick={setVol}><div className="vfill" style={{ width: (volume * 100) + '%' }} /></div></div>
+              <div className="volwrap"><span style={{ fontSize: 15 }}>{volume === 0 ? '🔇' : volume < 0.5 ? '🔉' : '🔊'}</span><div className="vol" ref={volRef} onPointerDown={onVolDown}><div className="vfill" style={{ width: (volume * 100) + '%' }} /></div></div>
             </div>
           </div>
           )}
@@ -490,6 +565,22 @@ function App() {
         </div>
       )}
 
+      {showSettings && (
+        <div className="modal-bg" onClick={() => setShowSettings(false)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-head"><span>⚙ Settings</span><button className="modal-x" title="Close" onClick={() => setShowSettings(false)}>✕</button></div>
+            <div className="set-row">
+              <div className="set-label"><div className="set-title">Effects intensity</div><div className="set-sub">particles, trails & the audio pulse</div></div>
+              <input className="set-range" type="range" min="0" max="1" step="0.05" value={settings.effects} onChange={(e) => updateSettings({ effects: parseFloat(e.target.value) })} />
+              <span className="set-val">{Math.round(settings.effects * 100)}%</span>
+            </div>
+            <div className="set-row">
+              <div className="set-label"><div className="set-title">Remember settings</div><div className="set-sub">restore volume, shuffle, repeat & tab on launch</div></div>
+              <button className={'toggle' + (settings.remember ? ' on' : '')} onClick={() => updateSettings({ remember: !settings.remember })}>{settings.remember ? 'On' : 'Off'}</button>
+            </div>
+          </div>
+        </div>
+      )}
       {toast && <div className={'toast' + (toast.err ? ' err' : '')}>{busy && <div className="spinner" />}<span>{toast.msg}</span></div>}
     </>
   );

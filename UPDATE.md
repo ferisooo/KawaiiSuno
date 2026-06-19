@@ -2,7 +2,16 @@
 
 Newest first, grouped by day. Short notes only.
 
-## 2026-06-19 — v1.3.7
+## 2026-06-19 — v1.3.8
+- Fixed: the **seek bar and volume now support click *and* drag** (drag-to-scrub),
+  not just click.
+- Added: a **⚙ Settings panel** (gear in the titlebar) with **Effects intensity**
+  (scales particles, trails & the audio pulse — down to off for low-end PCs) and
+  **Remember settings** (restores volume / shuffle / repeat / tab on launch).
+- Added: **Sort the library** — Newest / Oldest / Title A–Z / Recently played.
+- Added: **Favorites ❤️** — heart any song; filter the library to favorites only.
+- (Coming next: EQ, full offline library + download fix, Discord presence, an
+  in-app "update available" check.)
 - Added: a **tiny search box above "Your songs"** that filters the library in
   realtime as you type (count shows matches / total; ✕ clears).
 - Added: **"🔗 feris socials"** next to the app name in the titlebar → opens
