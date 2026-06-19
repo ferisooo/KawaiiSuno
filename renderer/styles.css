@@ -1,28 +1,30 @@
 /* ============================================================
    Suno Kawaii Player — styles
-   palette: ink #0c0a12 · grape #1a1230 · bubblegum #ff7ec2
-            hotpink #ff4fa3 · lemon #ffe066 · cloud #f7eefc
+   palette: BLACK · GOLD · ROSE PINK
+     ink #07060a · onyx #100b12 · rose #ff5d8f · soft-rose #ff86b3
+     gold #ffce47 · deep-gold #d4a017 · cloud #fdeef4
    layering (low -> high):
      content 1  <  particles 40  <  cursor-trail 45  <  titlebar 100  <  menus 200
    ============================================================ */
 
 :root {
-  --ink: #0c0a12;
-  --grape: #1a1230;
-  --grape-2: #241738;
-  --panel: rgba(33, 22, 54, 0.66);
-  --panel-solid: #1d1530;
-  --bubblegum: #ff7ec2;
-  --hotpink: #ff4fa3;
-  --lemon: #ffe066;
-  --lemon-deep: #ffd93d;
-  --cloud: #f7eefc;
-  --muted: #b9a4d6;
-  --line: rgba(255, 126, 194, 0.18);
+  --ink: #07060a;
+  --grape: #110b12;
+  --grape-2: #1a1018;
+  --panel: rgba(20, 12, 18, 0.68);
+  --panel-solid: #150d14;
+  --bubblegum: #ff86b3;          /* soft rose */
+  --hotpink: #ff5d8f;            /* rose pink */
+  --lemon: #ffce47;              /* gold (name kept for compatibility) */
+  --lemon-deep: #d4a017;         /* deep gold */
+  --cloud: #fdeef4;              /* warm white */
+  --muted: #cda7b6;              /* muted rose-grey */
+  --line: rgba(255, 93, 143, 0.22);
   --display: 'Fredoka', 'Segoe UI', system-ui, sans-serif;
   --body: 'Quicksand', 'Segoe UI', system-ui, sans-serif;
   --radius: 20px;
-  --shadow-pink: 0 8px 32px rgba(255, 79, 163, 0.28);
+  --shadow-pink: 0 8px 32px rgba(255, 93, 143, 0.34);
+  --shadow-gold: 0 8px 30px rgba(255, 206, 71, 0.36);
 }
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -44,10 +46,10 @@ body::before {
   inset: -30%;
   z-index: 0;
   background:
-    radial-gradient(40% 40% at 20% 20%, rgba(255, 79, 163, 0.30), transparent 60%),
-    radial-gradient(45% 45% at 80% 25%, rgba(255, 224, 102, 0.16), transparent 60%),
-    radial-gradient(50% 50% at 70% 85%, rgba(170, 90, 255, 0.26), transparent 62%),
-    radial-gradient(45% 45% at 25% 80%, rgba(255, 126, 194, 0.22), transparent 60%);
+    radial-gradient(40% 40% at 20% 20%, rgba(255, 93, 143, 0.34), transparent 60%),
+    radial-gradient(45% 45% at 80% 25%, rgba(255, 206, 71, 0.22), transparent 60%),
+    radial-gradient(50% 50% at 70% 85%, rgba(212, 160, 23, 0.20), transparent 62%),
+    radial-gradient(45% 45% at 25% 80%, rgba(255, 134, 179, 0.26), transparent 60%);
   filter: blur(8px);
   animation: drift 26s ease-in-out infinite alternate;
 }
@@ -56,7 +58,7 @@ body::after {
   position: fixed;
   inset: 0;
   z-index: 0;
-  background: linear-gradient(180deg, rgba(12,10,18,0.2), rgba(12,10,18,0.78));
+  background: linear-gradient(180deg, rgba(7,6,10,0.28), rgba(7,6,10,0.86));
   pointer-events: none;
 }
 @keyframes drift {
@@ -75,7 +77,7 @@ body::after {
 .ripple {
   position: fixed; z-index: 46; pointer-events: none;
   border-radius: 50%;
-  background: radial-gradient(circle, rgba(255,224,102,0.55), rgba(255,79,163,0.0) 70%);
+  background: radial-gradient(circle, rgba(255,206,71,0.6), rgba(255,93,143,0.0) 70%);
   transform: translate(-50%, -50%) scale(0);
   animation: ripple 620ms ease-out forwards;
 }
@@ -149,7 +151,7 @@ body::after {
   padding: 16px 16px 10px;
   display: flex; align-items: center; justify-content: space-between;
 }
-.side-title { font-family: var(--display); font-weight: 600; font-size: 15px; color: var(--cloud); }
+.side-title { font-family: var(--display); font-weight: 600; font-size: 15px; color: var(--cloud); text-shadow: 0 0 12px rgba(255,93,143,0.35); }
 .side-title small { color: var(--muted); font-weight: 500; margin-left: 6px; font-size: 11px; }
 
 .pill-btn {
@@ -249,7 +251,8 @@ body::after {
 @keyframes spin { to { transform: rotate(360deg); } }
 
 .now-meta { min-width: 0; }
-.now-kicker { font-size: 12px; letter-spacing: 2px; text-transform: uppercase; color: var(--lemon); font-weight: 600; }
+.now-kicker { font-size: 12px; letter-spacing: 2px; text-transform: uppercase; color: var(--lemon); font-weight: 700; text-shadow: 0 0 14px rgba(255,206,71,0.6); animation: kickerglow 3s ease-in-out infinite; }
+@keyframes kickerglow { 0%,100% { text-shadow: 0 0 12px rgba(255,206,71,0.5); } 50% { text-shadow: 0 0 22px rgba(255,206,71,0.9), 0 0 8px rgba(255,93,143,0.5); } }
 .now-title {
   font-family: var(--display); font-weight: 700; font-size: 32px; line-height: 1.15;
   margin: 6px 0 8px; color: var(--cloud);
@@ -257,16 +260,17 @@ body::after {
 }
 .now-title.glow { animation: titleglow 3.4s ease-in-out infinite; }
 @keyframes titleglow {
-  0%,100% { text-shadow: 0 0 14px rgba(255,126,194,0.45), 0 0 4px rgba(255,224,102,0.3); }
-  50%     { text-shadow: 0 0 26px rgba(255,79,163,0.7), 0 0 10px rgba(255,224,102,0.5); }
+  0%,100% { text-shadow: 0 0 18px rgba(255,93,143,0.6), 0 0 6px rgba(255,206,71,0.4); }
+  50%     { text-shadow: 0 0 34px rgba(255,93,143,0.9), 0 0 14px rgba(255,206,71,0.7); }
 }
 .now-sub { color: var(--muted); font-size: 14px; }
 
 /* live visualizer */
-.viz { display: flex; gap: 4px; align-items: flex-end; height: 64px; margin-top: 18px; }
+.viz { display: flex; gap: 5px; align-items: flex-end; height: 140px; margin-top: 22px; padding: 0 2px; }
 .viz span {
-  flex: 1; min-width: 2px; border-radius: 6px 6px 2px 2px; height: 6px;
+  flex: 1; min-width: 4px; border-radius: 8px 8px 3px 3px; height: 8px;
   background: linear-gradient(180deg, var(--lemon), var(--hotpink));
+  box-shadow: 0 0 12px rgba(255,93,143,0.55), 0 0 6px rgba(255,206,71,0.45);
   transition: height .08s linear;
 }
 
@@ -384,7 +388,8 @@ body::after {
    ============================================================ */
 
 /* brand glow + heart */
-.titlebar .brand { text-shadow: 0 0 16px rgba(255,126,194,0.35); }
+.titlebar .brand { text-shadow: 0 0 18px rgba(255,93,143,0.5), 0 0 8px rgba(255,206,71,0.3); animation: brandglow 4s ease-in-out infinite; }
+@keyframes brandglow { 0%,100% { filter: drop-shadow(0 0 6px rgba(255,93,143,0.3)); } 50% { filter: drop-shadow(0 0 14px rgba(255,206,71,0.5)); } }
 
 /* collapse rail button */
 .rail-btn {
@@ -438,7 +443,7 @@ body::after {
 }
 .lyric-line.on {
   color: var(--cloud); opacity: 1; font-size: 17px;
-  text-shadow: 0 0 18px rgba(255,79,163,0.7), 0 0 8px rgba(255,224,102,0.5);
+  text-shadow: 0 0 20px rgba(255,93,143,0.85), 0 0 10px rgba(255,206,71,0.55);
   transform: scale(1.03);
 }
 
