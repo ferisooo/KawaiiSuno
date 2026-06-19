@@ -26,6 +26,11 @@ function loadState() {
   const c = readConfig();
   state.tracks = Array.isArray(c.importedTracks) ? c.importedTracks : [];
   state.playlists = Array.isArray(c.playlists) ? c.playlists : [];
+  // backfill addedAt for songs imported before it was tracked, preserving their
+  // existing order — otherwise "newest/oldest first" has nothing to sort by
+  let changed = false; const base = Date.now() - state.tracks.length * 1000;
+  state.tracks.forEach((t, i) => { if (!t.addedAt) { t.addedAt = base + i * 1000; changed = true; } });
+  if (changed) saveState();
 }
 function saveState() {
   const c = readConfig();

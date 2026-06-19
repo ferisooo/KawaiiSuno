@@ -2,6 +2,16 @@
 
 Newest first, grouped by day. Short notes only.
 
+## 2026-06-19 — v1.3.12
+- Fixed: **the ⚙ settings gear is clickable now** — it sat in the titlebar's
+  drag region, so the OS swallowed the clicks. Moved into the no-drag button group.
+- Fixed: **sort by Newest / Oldest / Recently played works.** Songs imported
+  before "date added" was tracked had no timestamp, so date sorts had nothing to
+  order by; they're now backfilled (keeping their order) on launch.
+- Changed: **removed the "Import from my Suno songs" tools dropdown** from the
+  sidebar (adding songs lives in Explore → 🎯 Pick songs) and **moved Backup /
+  Restore into Settings**.
+
 ## 2026-06-19 — v1.3.11
 - Added: **in-app update check** — on launch the app reads the latest version from
   UPDATE.md in the repo and, if it's newer than the running build, shows an

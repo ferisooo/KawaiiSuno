@@ -54,8 +54,8 @@ function TitleBar({ onSettings }) {
       <div className="brand"><span className="heart">♥</span> Suno Kawaii Player</div>
       <button className="social-link" title="Feris socials — mez.ink/ferisooo" onClick={() => api.openExternal('https://mez.ink/ferisooo')}>🔗 feris socials</button>
       <div className="spacer" />
-      <button className="win-btn" title="Settings" onClick={onSettings}>⚙</button>
       <div className="win-btns">
+        <button className="win-btn" title="Settings" onClick={onSettings}>⚙</button>
         <button className="win-btn" title="Minimize" onClick={() => api.minimize()}>—</button>
         <button className="win-btn" title="Maximize" onClick={() => api.maximize()}>{max ? '❐' : '▢'}</button>
         <button className="win-btn close" title="Close" onClick={() => api.close()}>✕</button>
@@ -119,7 +119,6 @@ function App() {
   const [plMenuOpen, setPlMenuOpen] = useState(false);
   const [picking, setPicking] = useState(false);   // explore: click-a-song-to-add mode
   const [creationMounted, setCreationMounted] = useState(false);   // lazy-mount the Creation tab
-  const [actionsOpen, setActionsOpen] = useState(false);           // library: import/backup/restore dropdown
   const [bigViz, setBigViz] = useState(false);                     // now-playing: hide art, enlarge visualizer
   const [search, setSearch] = useState('');                        // library: realtime song search
   const [settings, setSettings] = useState({ effects: 1, remember: true, sort: 'added-desc', favorites: [], playStats: {}, eq: { low: 0, mid: 0, high: 0 }, offline: false });
@@ -350,7 +349,6 @@ function App() {
     catch (e) { flash(e.message || 'Suno load failed.', true); } finally { setBusy(false); }
   };
   function navSuno(url) { const wv = webviewRef.current; if (wv && wv.loadURL) { try { wv.loadURL(url); } catch {} } else setSunoStart(url); }
-  const importSunoPlaylist = () => { setEmbedded(true); setSunoStart('https://suno.com/me'); setTab('explore'); navSuno('https://suno.com/me'); flash('Open your songs, hit 🎯 Pick songs, then click the ones to add 🎀'); };
   // Manual pick mode: click a song right in the Suno pane to add exactly that one.
   const togglePick = () => { const next = !picking; setPicking(next); const w = webviewRef.current; if (w && w.send) { try { w.send('kw-pick-mode', next); } catch {} } flash(next ? 'Pick mode on — click any song in the page to add it 🎯' : 'Pick mode off'); };
 
@@ -456,17 +454,7 @@ function App() {
               </div>
               <div className="side-head">
                 <div className="side-title">Your songs <small>{q ? shownList.length + ' / ' + tracks.length : tracks.length}</small></div>
-                <button className={'pill-btn' + (actionsOpen ? ' hot' : '')} title="Import / backup / restore" onClick={() => setActionsOpen((o) => !o)}>{actionsOpen ? '▴ tools' : '▾ tools'}</button>
               </div>
-              {actionsOpen && (
-                <>
-                  <button className="connect-btn" onClick={importSunoPlaylist}>⬇ Import from my Suno songs</button>
-                  <div className="sub-actions">
-                    <button className="ghost-btn" title="Save all your imported songs + playlists to a .json file you pick" onClick={async () => { const ok = await api.exportLibrary(); if (ok) flash('Library backed up 💾'); }}>💾 Backup</button>
-                    <button className="ghost-btn" title="Load songs + playlists back from a backup .json (merges — no duplicates)" onClick={async () => { const ok = await api.importLibrary(); flash(ok ? 'Library restored 💜' : 'Nothing restored.', !ok); }}>📂 Restore</button>
-                  </div>
-                </>
-              )}
             </>
           )}
 
@@ -645,6 +633,11 @@ function App() {
               <div className="set-label"><div className="set-title">Offline library</div><div className="set-sub">download every song so it plays with no internet</div></div>
               <button className="set-btn" disabled={caching || !tracks.length} onClick={cacheAll}>{caching ? 'Caching…' : 'Cache all'}</button>
               <button className="set-btn danger" disabled={caching || !offlineCount} onClick={clearCache}>Clear</button>
+            </div>
+            <div className="set-row">
+              <div className="set-label"><div className="set-title">Backup &amp; restore</div><div className="set-sub">save your songs + playlists to a .json, or merge one back</div></div>
+              <button className="set-btn" title="Save all your songs + playlists to a .json file you pick" onClick={async () => { const ok = await api.exportLibrary(); if (ok) flash('Library backed up 💾'); }}>💾 Backup</button>
+              <button className="set-btn" title="Load songs + playlists from a backup .json (merges — no duplicates)" onClick={async () => { const ok = await api.importLibrary(); flash(ok ? 'Library restored 💜' : 'Nothing restored.', !ok); }}>📂 Restore</button>
             </div>
             <div className="set-eq">
               <div className="set-label"><div className="set-title">Equalizer</div><div className="set-sub">shapes the sound (and the visualizer follows it)</div></div>
