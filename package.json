@@ -1,0 +1,29 @@
+{
+  "name": "suno-kawaii-player",
+  "version": "1.2.4",
+  "description": "A kawaii black/pink/yellow desktop music player for Suno AI tracks.",
+  "main": "main.js",
+  "author": "Feris",
+  "license": "MIT",
+  "scripts": {
+    "build": "node build.js",
+    "start": "electron .",
+    "dist": "electron-builder"
+  },
+  "dependencies": {
+    "sql.js": "1.10.3"
+  },
+  "devDependencies": {
+    "electron": "31.7.7",
+    "esbuild": "0.21.5"
+  },
+  "build": {
+    "appId": "com.feris.sunokawaiiplayer",
+    "productName": "SunoKawaiiPlayer",
+    "asar": false,
+    "files": [ "main.js", "preload.js", "index.html", "renderer/**/*", "assets/**/*" ],
+    "directories": { "output": "dist" },
+    "win": { "target": "nsis", "icon": "assets/icon.ico" },
+    "nsis": { "oneClick": false, "allowToChangeInstallationDirectory": true }
+  }
+}

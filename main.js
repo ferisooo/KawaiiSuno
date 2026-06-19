@@ -1,0 +1,398 @@
+// main.js — Electron main process.
+// Owns persistent state (imported songs + playlists), the embedded-Suno
+// harvester, right-click import, and the experimental Chrome cookie import.
+const { app, BrowserWindow, ipcMain, dialog, shell, session, net, webContents, Menu } = require('electron');
+const path = require('path');
+const fs = require('fs');
+const os = require('os');
+const https = require('https');
+const http = require('http');
+const crypto = require('crypto');
+const { execFile } = require('child_process');
+
+const USER_AGENT =
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 ' +
+  '(KHTML, like Gecko) Chrome/124.0 Safari/537.36 SunoKawaiiPlayer/1.1';
+
+let mainWindow = null;
+
+// silence harmless WebRTC STUN probes from the embedded page
+app.commandLine.appendSwitch('force-webrtc-ip-handling-policy', 'disable_non_proxied_udp');
+
+/* ===================== persistent state ===================== */
+function configPath() { return path.join(app.getPath('userData'), 'config.json'); }
+function readConfig() { try { return JSON.parse(fs.readFileSync(configPath(), 'utf8')); } catch { return {}; } }
+function writeConfig(c) { try { fs.writeFileSync(configPath(), JSON.stringify(c, null, 2)); } catch {} }
+
+const state = { tracks: [], playlists: [] };
+function loadState() {
+  const c = readConfig();
+  state.tracks = Array.isArray(c.importedTracks) ? c.importedTracks : [];
+  state.playlists = Array.isArray(c.playlists) ? c.playlists : [];
+}
+function saveState() {
+  const c = readConfig();
+  c.importedTracks = state.tracks; c.playlists = state.playlists;
+  writeConfig(c);
+  if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('state:update', state);
+}
+function notify(msg, err) { if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('toast', { msg, err: !!err }); }
+
+function importTrack(t, playlistId) {
+  if (!t || !t.id) return;
+  if (!state.tracks.some((x) => x.id === t.id)) {
+    state.tracks.push({ id: t.id, title: t.title || 'Suno song', audioUrl: t.audioUrl || null, cover: t.cover || null, lyrics: t.lyrics || null, source: 'suno' });
+  }
+  if (playlistId) {
+    const p = state.playlists.find((p) => p.id === playlistId);
+    if (p && !p.trackIds.includes(t.id)) p.trackIds.push(t.id);
+  }
+  saveState();
+}
+
+/* ===================== window ===================== */
+function createWindow() {
+  mainWindow = new BrowserWindow({
+    width: 1200, height: 780, minWidth: 900, minHeight: 600,
+    frame: false, backgroundColor: '#0c0a12', show: false,
+    webPreferences: {
+      preload: path.join(__dirname, 'preload.js'),
+      contextIsolation: true, nodeIntegration: false, sandbox: false,
+      webviewTag: true,
+    },
+  });
+  mainWindow.loadFile('index.html');
+  mainWindow.once('ready-to-show', () => mainWindow.show());
+  mainWindow.on('maximize', () => mainWindow.webContents.send('window:state', true));
+  mainWindow.on('unmaximize', () => mainWindow.webContents.send('window:state', false));
+  mainWindow.on('closed', () => { mainWindow = null; });
+}
+
+app.whenReady().then(() => {
+  loadState();
+  createWindow();
+  app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) createWindow(); });
+});
+app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit(); });
+
+/* ===================== window controls ===================== */
+ipcMain.on('window:minimize', () => mainWindow && mainWindow.minimize());
+ipcMain.on('window:maximize', () => { if (mainWindow) mainWindow.isMaximized() ? mainWindow.unmaximize() : mainWindow.maximize(); });
+ipcMain.on('window:close', () => mainWindow && mainWindow.close());
+ipcMain.on('open:external', (_e, url) => { if (/^https?:\/\//i.test(url)) shell.openExternal(url); });
+
+/* ===================== state IPC ===================== */
+ipcMain.handle('state:get', () => state);
+ipcMain.handle('track:import', (_e, t, playlistId) => { importTrack(t, playlistId); return true; });
+ipcMain.handle('track:remove', (_e, id) => {
+  state.tracks = state.tracks.filter((t) => t.id !== id);
+  state.playlists.forEach((p) => { p.trackIds = p.trackIds.filter((x) => x !== id); });
+  saveState(); return true;
+});
+ipcMain.handle('playlist:create', (_e, name) => {
+  const p = { id: 'pl_' + Date.now().toString(36), name: (name || 'New playlist').slice(0, 40), trackIds: [] };
+  state.playlists.push(p); saveState(); return p;
+});
+ipcMain.handle('playlist:rename', (_e, id, name) => { const p = state.playlists.find((p) => p.id === id); if (p) p.name = (name || p.name).slice(0, 40); saveState(); return true; });
+ipcMain.handle('playlist:delete', (_e, id) => { state.playlists = state.playlists.filter((p) => p.id !== id); saveState(); return true; });
+ipcMain.handle('playlist:add', (_e, pid, tid) => { const p = state.playlists.find((p) => p.id === pid); if (p && !p.trackIds.includes(tid)) p.trackIds.push(tid); saveState(); return true; });
+ipcMain.handle('playlist:remove', (_e, pid, tid) => { const p = state.playlists.find((p) => p.id === pid); if (p) p.trackIds = p.trackIds.filter((x) => x !== tid); saveState(); return true; });
+
+/* ===================== tiny fetch helper ===================== */
+function fetchRaw(url, { binary = false, redirects = 5, auth = null } = {}) {
+  return new Promise((resolve, reject) => {
+    const lib = url.startsWith('https') ? https : http;
+    const headers = { 'User-Agent': USER_AGENT, 'Accept': '*/*' };
+    if (auth) headers['Authorization'] = auth;
+    const req = lib.get(url, { headers }, (res) => {
+      if ([301, 302, 303, 307, 308].includes(res.statusCode) && res.headers.location) {
+        if (redirects <= 0) return reject(new Error('Too many redirects'));
+        res.resume();
+        return resolve(fetchRaw(new URL(res.headers.location, url).toString(), { binary, redirects: redirects - 1, auth }));
+      }
+      if (res.statusCode < 200 || res.statusCode >= 300) { res.resume(); return reject(new Error('HTTP ' + res.statusCode)); }
+      const chunks = [];
+      res.on('data', (c) => chunks.push(c));
+      res.on('end', () => { const buf = Buffer.concat(chunks); resolve(binary ? buf : buf.toString('utf8')); });
+    });
+    req.on('error', reject);
+    req.setTimeout(20000, () => req.destroy(new Error('Request timed out')));
+  });
+}
+
+/* ===================== paste-a-link loader ===================== */
+function extractSunoId(input) {
+  const s = String(input || '').replace(/[\u00a0\u200b\u200c\u200d\ufeff]/g, '').trim();
+  const uuid = s.match(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i);
+  if (uuid) return uuid[0];
+  const seg = s.split(/[?#]/)[0].split('/').filter(Boolean).pop();
+  if (seg && /^[0-9a-z_-]{6,}$/i.test(seg)) return seg;
+  if (/^[0-9a-z_-]{6,}$/i.test(s)) return s;
+  return null;
+}
+function metaTag(html, prop) {
+  const re1 = new RegExp('<meta[^>]+(?:property|name)=["\']' + prop + '["\'][^>]*content=["\']([^"\']+)["\']', 'i');
+  const re2 = new RegExp('<meta[^>]+content=["\']([^"\']+)["\'][^>]*(?:property|name)=["\']' + prop + '["\']', 'i');
+  const m = html.match(re1) || html.match(re2);
+  return m ? m[1] : null;
+}
+ipcMain.handle('suno:load', async (_e, input) => {
+  const id = extractSunoId(input);
+  if (!id) throw new Error('Couldn\'t find a song id in that link.');
+  let title = 'Suno Track', cover = null, audioUrl = null, lyrics = null;
+  try {
+    const html = await fetchRaw('https://suno.com/song/' + id);
+    title = metaTag(html, 'og:title') || title;
+    cover = metaTag(html, 'og:image') || cover;
+    audioUrl = metaTag(html, 'og:audio') || (html.match(/https:\/\/cdn[0-9]*\.suno\.ai\/[0-9a-f-]+\.mp3/i) || [])[0] || audioUrl;
+  } catch {}
+  if (!audioUrl) audioUrl = 'https://cdn1.suno.ai/' + id + '.mp3';
+  return { id: 'suno:' + id, title, cover, audioUrl, lyrics };
+});
+
+/* ===================== Suno session + audio fetch ===================== */
+function sunoSession() { return session.fromPartition('persist:suno'); }
+let sunoAuth = null;
+
+function sunoFetchOnce(url, { auth, referer }) {
+  return new Promise((resolve, reject) => {
+    const request = net.request({ url, session: sunoSession(), useSessionCookies: true });
+    request.setHeader('User-Agent', USER_AGENT);
+    request.setHeader('Accept', '*/*');
+    if (referer) { request.setHeader('Referer', 'https://suno.com/'); request.setHeader('Origin', 'https://suno.com'); }
+    if (auth && sunoAuth) request.setHeader('Authorization', sunoAuth);
+    request.on('response', (r) => {
+      const c = [];
+      r.on('data', (d) => c.push(d));
+      r.on('end', () => { if (r.statusCode >= 200 && r.statusCode < 300) resolve(Buffer.concat(c)); else reject(new Error('HTTP ' + r.statusCode)); });
+    });
+    request.on('error', reject);
+    request.end();
+  });
+}
+
+async function sunoFetchBuffer(url) {
+  // build candidate urls: the captured one + plain public CDN forms by id
+  const id = extractSunoId(url);
+  const candidates = [url];
+  if (id) { candidates.push('https://cdn1.suno.ai/' + id + '.mp3', 'https://cdn2.suno.ai/' + id + '.mp3'); }
+  // header variants — some CDNs 403 with an Authorization header, some need Referer
+  const variants = [{ auth: false, referer: true }, { auth: true, referer: true }, { auth: false, referer: false }];
+  let lastErr;
+  for (const u of candidates) {
+    for (const v of variants) {
+      try { const buf = await sunoFetchOnce(u, v); if (buf && buf.length > 1024) return buf; }
+      catch (e) { lastErr = e; if (!/HTTP 40[0-9]|HTTP 5/.test(e.message)) { /* network err: try next */ } }
+    }
+  }
+  throw lastErr || new Error('Could not fetch audio.');
+}
+
+ipcMain.handle('suno:fetchUrl', async (_e, url) => {
+  if (!/suno\.(ai|com)/i.test(url) && !/cdn[0-9]*\.suno/i.test(url)) throw new Error('That URL is not a Suno address.');
+  try {
+    const buf = await sunoFetchBuffer(url);
+    return { bytes: buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength) };
+  } catch (e) {
+    throw new Error('Suno blocked the audio (' + e.message + '). Make sure you\'re logged in, then play it once in the Explore pane and re-import.');
+  }
+});
+
+ipcMain.handle('tracks:download', async (_e, ids) => {
+  const picks = state.tracks.filter((t) => ids.includes(t.id) && t.audioUrl);
+  if (!picks.length) return { ok: false, message: 'Those songs have no downloadable audio.' };
+  const res = await dialog.showOpenDialog(mainWindow, { title: 'Choose a download folder', properties: ['openDirectory', 'createDirectory'] });
+  if (res.canceled || !res.filePaths.length) return { ok: false, canceled: true };
+  const dir = res.filePaths[0]; let n = 0;
+  for (const t of picks) {
+    try {
+      const buf = await sunoFetchBuffer(t.audioUrl);
+      const base = (t.title || 'song').replace(/[\\/:*?"<>|]/g, '_').slice(0, 80).trim() || 'song';
+      let file = path.join(dir, base + '.mp3'); let i = 1;
+      while (fs.existsSync(file)) file = path.join(dir, base + ' (' + (i++) + ').mp3');
+      fs.writeFileSync(file, buf); n++;
+    } catch {}
+  }
+  return { ok: n > 0, count: n, dir };
+});
+
+/* ===================== embedded harvest (opt-in import) ===================== */
+const attached = new Set();
+const pool = new Map();       // suno id -> track
+let pageIds = new Set();      // ids seen on the current page
+const playedIds = new Set();  // ids whose audio actually streamed (= played)
+let lastSunoWc = null;
+
+function markPlayed(id) {
+  if (playedIds.has(id)) return;
+  playedIds.add(id);
+  if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('suno:played', { id });
+}
+
+function harvestTracks(node, out, seen) {
+  out = out || []; seen = seen || new Set();
+  if (!node || typeof node !== 'object') return out;
+  if (Array.isArray(node)) { for (const x of node) harvestTracks(x, out, seen); return out; }
+  const audio = node.audio_url || node.audioUrl || node.audio || node.stream_url || null;
+  if (audio && typeof audio === 'string' && /^https?:\/\//.test(audio) && /\.(mp3|m4a|mp4|ogg|wav)(\?|$)/i.test(audio)) {
+    const id = String(node.id || node.clip_id || audio);
+    if (!seen.has(id)) {
+      seen.add(id);
+      const md = node.metadata || {};
+      out.push({
+        id: 'sunoR:' + id, rawId: id,
+        title: node.title || md.title || node.display_name || 'Untitled Suno song',
+        audioUrl: audio,
+        cover: node.image_url || node.image_large_url || md.cover_image_url || null,
+        lyrics: md.prompt || md.lyrics || node.lyrics || null,
+        source: 'suno',
+      });
+    }
+  }
+  for (const k in node) { const v = node[k]; if (v && typeof v === 'object') harvestTracks(v, out, seen); }
+  return out;
+}
+
+function importVisible(playlistId) {
+  let n = 0;
+  for (const id of pageIds) { const t = pool.get(id); if (t) { importTrack(t, playlistId); n++; } }
+  notify(n ? ('Imported ' + n + ' song' + (n > 1 ? 's' : '') + ' from this page 💜') : 'No songs found on this page to import.', !n);
+}
+
+function attachHarvest(wc) {
+  if (!wc || attached.has(wc.id)) return;
+  attached.add(wc.id);
+  lastSunoWc = wc;
+  wc.on('destroyed', () => { attached.delete(wc.id); if (lastSunoWc === wc) lastSunoWc = null; });
+
+  try { wc.setWebRTCIPHandlingPolicy('disable_non_proxied_udp'); } catch {}
+
+  // capture the bearer token Suno's page sends, so we can fetch private audio.
+  // (Harvesting of the song list happens in renderer/suno-preload.js instead of
+  //  the CDP debugger, which could crash the renderer.)
+  try {
+    wc.session.webRequest.onBeforeSendHeaders((details, cb) => {
+      const h = details.requestHeaders;
+      const auth = h['Authorization'] || h['authorization'];
+      if (auth && /suno/i.test(details.url)) sunoAuth = auth;
+      cb({ requestHeaders: h });
+    });
+  } catch {}
+}
+
+ipcMain.handle('suno:attach', (_e, wcId) => { attachHarvest(webContents.fromId(wcId)); return true; });
+ipcMain.handle('suno:importVisible', (_e, playlistId) => { importVisible(playlistId || null); return true; });
+
+/* ===================== backup / restore ===================== */
+ipcMain.handle('config:export', async () => {
+  const res = await dialog.showSaveDialog(mainWindow, { title: 'Backup library', defaultPath: 'kawaii-library.json', filters: [{ name: 'JSON', extensions: ['json'] }] });
+  if (res.canceled || !res.filePath) return false;
+  try { fs.writeFileSync(res.filePath, JSON.stringify({ importedTracks: state.tracks, playlists: state.playlists }, null, 2)); return true; } catch { return false; }
+});
+ipcMain.handle('config:import', async () => {
+  const res = await dialog.showOpenDialog(mainWindow, { title: 'Restore library', properties: ['openFile'], filters: [{ name: 'JSON', extensions: ['json'] }] });
+  if (res.canceled || !res.filePaths.length) return false;
+  try {
+    const d = JSON.parse(fs.readFileSync(res.filePaths[0], 'utf8'));
+    if (Array.isArray(d.importedTracks)) { const have = new Set(state.tracks.map((t) => t.id)); for (const t of d.importedTracks) if (!have.has(t.id)) state.tracks.push(t); }
+    if (Array.isArray(d.playlists)) { const have = new Set(state.playlists.map((p) => p.id)); for (const p of d.playlists) if (!have.has(p.id)) state.playlists.push(p); }
+    saveState(); return true;
+  } catch { return false; }
+});
+
+/* ===================== experimental Chrome cookie import ===================== */
+function dpapiUnprotect(buf) {
+  return new Promise((resolve, reject) => {
+    const tmpIn = path.join(os.tmpdir(), 'kw_dpapi_in_' + Date.now() + '.txt');
+    const ps = path.join(os.tmpdir(), 'kw_dpapi_' + Date.now() + '.ps1');
+    fs.writeFileSync(tmpIn, buf.toString('base64'));
+    fs.writeFileSync(ps,
+      "$ErrorActionPreference='Stop'\n" +
+      "Add-Type -AssemblyName System.Security\n" +
+      "$b=[Convert]::FromBase64String((Get-Content -Raw '" + tmpIn.replace(/\\/g, '\\\\') + "'))\n" +
+      "$d=[System.Security.Cryptography.ProtectedData]::Unprotect($b,$null,'CurrentUser')\n" +
+      "[Convert]::ToBase64String($d)\n");
+    execFile('powershell', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', ps], (err, stdout) => {
+      try { fs.unlinkSync(tmpIn); fs.unlinkSync(ps); } catch {}
+      if (err) return reject(err);
+      resolve(Buffer.from(String(stdout).trim(), 'base64'));
+    });
+  });
+}
+
+async function chromeImport() {
+  let initSqlJs;
+  try { initSqlJs = require('sql.js'); } catch { return { ok: false, message: 'Cookie reader (sql.js) not installed.' }; }
+  const local = process.env.LOCALAPPDATA || path.join(os.homedir(), 'AppData', 'Local');
+  const udir = path.join(local, 'Google', 'Chrome', 'User Data');
+  const localState = path.join(udir, 'Local State');
+  if (!fs.existsSync(localState)) return { ok: false, message: 'Chrome was not found on this PC.' };
+
+  let aesKey;
+  try {
+    const ls = JSON.parse(fs.readFileSync(localState, 'utf8'));
+    let enc = Buffer.from(ls.os_crypt.encrypted_key, 'base64');
+    if (enc.slice(0, 5).toString() === 'DPAPI') enc = enc.slice(5);
+    aesKey = await dpapiUnprotect(enc);
+  } catch { return { ok: false, message: 'Could not read Chrome\'s encryption key.' }; }
+
+  const dbs = [
+    path.join(udir, 'Default', 'Network', 'Cookies'),
+    path.join(udir, 'Default', 'Cookies'),
+    path.join(udir, 'Profile 1', 'Network', 'Cookies'),
+  ].filter((p) => fs.existsSync(p));
+  if (!dbs.length) return { ok: false, message: 'Chrome cookie store not found.' };
+
+  let SQL;
+  try { SQL = await initSqlJs({ locateFile: (f) => path.join(path.dirname(require.resolve('sql.js')), f) }); }
+  catch { return { ok: false, message: 'Could not start the cookie reader.' }; }
+
+  let count = 0, abe = 0;
+  for (const dbPath of dbs) {
+    let buf;
+    try { const tmp = path.join(os.tmpdir(), 'kw_ck_' + Date.now()); fs.copyFileSync(dbPath, tmp); buf = fs.readFileSync(tmp); fs.unlinkSync(tmp); } catch { continue; }
+    let db; try { db = new SQL.Database(buf); } catch { continue; }
+    let res; try { res = db.exec("SELECT host_key,name,encrypted_value,path,is_secure,expires_utc FROM cookies WHERE host_key LIKE '%suno%' OR host_key LIKE '%clerk%'"); } catch { db.close(); continue; }
+    if (!res.length) { db.close(); continue; }
+    const cols = res[0].columns, rows = res[0].values;
+    for (const row of rows) {
+      const o = {}; cols.forEach((c, i) => (o[c] = row[i]));
+      if (!o.encrypted_value) continue;
+      const ev = Buffer.from(o.encrypted_value);
+      const prefix = ev.slice(0, 3).toString();
+      let value = null;
+      if (prefix === 'v10' || prefix === 'v11') {
+        try {
+          const nonce = ev.slice(3, 15), tag = ev.slice(ev.length - 16), ct = ev.slice(15, ev.length - 16);
+          const dec = crypto.createDecipheriv('aes-256-gcm', aesKey, nonce); dec.setAuthTag(tag);
+          let pt = Buffer.concat([dec.update(ct), dec.final()]);
+          value = pt.toString('utf8');
+          if (pt.length > 32 && /[^\x20-\x7e]/.test(value.slice(0, 4))) value = pt.slice(32).toString('utf8');
+        } catch { continue; }
+      } else if (prefix === 'v20') { abe++; continue; }
+      else { continue; }
+      if (value == null) continue;
+      const host = o.host_key.replace(/^\./, '');
+      const url = (o.is_secure ? 'https://' : 'http://') + host + (o.path || '/');
+      try {
+        await sunoSession().cookies.set({
+          url, name: o.name, value, path: o.path || '/', secure: !!o.is_secure,
+          expirationDate: o.expires_utc ? (o.expires_utc / 1000000 - 11644473600) : undefined,
+        });
+        count++;
+      } catch {}
+    }
+    db.close();
+  }
+  if (count === 0 && abe > 0) return { ok: false, message: 'Your Chrome version locks cookies (app-bound encryption) — they can\'t be imported. Please log in once manually; it\'s remembered after.' };
+  if (count === 0) return { ok: false, message: 'No Suno cookies found in Chrome — are you logged into Suno there?' };
+  return { ok: true, count };
+}
+
+ipcMain.handle('suno:chromeLogin', async () => {
+  try {
+    const r = await chromeImport();
+    if (r.ok && lastSunoWc && !lastSunoWc.isDestroyed()) { try { lastSunoWc.loadURL('https://suno.com/me'); } catch {} }
+    return r;
+  } catch (e) { return { ok: false, message: e.message || 'Chrome import failed.' }; }
+});

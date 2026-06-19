@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <!-- Local-only resources. Google Fonts is allowed but everything has a
+       system-font fallback so the UI renders fully with no internet. -->
+  <meta http-equiv="Content-Security-Policy"
+        content="default-src 'self'; img-src 'self' data: blob: https:; media-src 'self' blob: data:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; script-src 'self';" />
+  <title>Suno Kawaii Player</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&family=Quicksand:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="renderer/styles.css" />
+</head>
+<body>
+  <canvas id="bg-particles"></canvas>
+  <canvas id="cursor-trail"></canvas>
+  <div id="root"></div>
+
+  <!-- Vendored React (no CDN). -->
+  <script src="renderer/vendor/react.production.min.js"></script>
+  <script src="renderer/vendor/react-dom.production.min.js"></script>
+  <!-- Pre-compiled UI (source lives in renderer/app.jsx). -->
+  <script src="renderer/app.js"></script>
+</body>
+</html>
