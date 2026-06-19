@@ -2,6 +2,10 @@
 
 Newest first. Short notes only.
 
+## v1.3.5 — 2026-06-19
+- Removed the **lyrics panel** under the player to free up vertical space (and its
+  dead code/styles). The now-playing area + visualizer get the room.
+
 ## v1.3.4 — 2026-06-19
 - Added: a **📊 toggle on the Now Playing view that hides the album art and
   enlarges the visualizer** (taller bars, more of them, full width). Tap 🖼 to

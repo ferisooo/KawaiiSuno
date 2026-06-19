@@ -111,7 +111,7 @@ function App() {
   const [bigViz, setBigViz] = useState(false);                     // now-playing: hide art, enlarge visualizer
 
   const audioRef = useRef(null), sunoRef = useRef(null), webviewRef = useRef(null);
-  const urlCache = useRef(new Map()), vizRef = useRef(null), lyricsRef = useRef(null);
+  const urlCache = useRef(new Map()), vizRef = useRef(null);
   const audioCtxRef = useRef(null), analyserRef = useRef(null);
   const queueRef = useRef([]), idxRef = useRef(-1);
   const repeatRef = useRef('off'), shuffleRef = useRef(false);
@@ -161,17 +161,6 @@ function App() {
     raf = requestAnimationFrame(draw);
     return () => cancelAnimationFrame(raf);
   }, [playing, bigViz]);
-
-  /* ---- lyrics auto-scroll with progress ---- */
-  const lyricLines = (current && current.lyrics ? String(current.lyrics).split(/\n+/).map((l) => l.trim()).filter(Boolean) : []);
-  useEffect(() => {
-    const box = lyricsRef.current; if (!box || !lyricLines.length || !duration) return;
-    const ratio = Math.min(1, progress / duration);
-    const active = Math.min(lyricLines.length - 1, Math.floor(ratio * lyricLines.length));
-    const lines = box.children;
-    for (let i = 0; i < lines.length; i++) lines[i].classList.toggle('on', i === active);
-    const el = lines[active]; if (el) box.scrollTo({ top: el.offsetTop - box.clientHeight / 2 + el.clientHeight / 2, behavior: 'smooth' });
-  }, [progress, duration, current]);
 
   /* ---- playback ---- */
   const resolveUrl = useCallback(async (track) => {
@@ -409,9 +398,6 @@ function App() {
                   <div className="viz" ref={vizRef}>{Array.from({ length: bigViz ? 56 : 28 }).map((_, i) => <span key={i} />)}</div>
                 </div>
               </section>
-              {lyricLines.length > 0 && (
-                <div className="lyrics" ref={lyricsRef}>{lyricLines.map((l, i) => <div key={i} className="lyric-line">{l}</div>)}</div>
-              )}
             </div>
 
             {embedded && (
