@@ -2,6 +2,12 @@
 
 Newest first. Short notes only.
 
+## v1.3.6 — 2026-06-19
+- Fixed: **visualizer now uses all its bars.** It mapped frequency bins 1:1, so the
+  low end hogged the left bars and the right ones stayed flat. Now the analyser has
+  more resolution and bars are spread across the spectrum on a log scale (peak per
+  band, with a gentle lift on the highs), so every bar reacts to the music.
+
 ## v1.3.5 — 2026-06-19
 - Removed the **lyrics panel** under the player to free up vertical space (and its
   dead code/styles). The now-playing area + visualizer get the room.

@@ -140,7 +140,7 @@ function App() {
   }, []);
   function ensureAnalyser() {
     if (analyserRef.current) return;
-    try { const Ctx = window.AudioContext || window.webkitAudioContext; const ctx = new Ctx(); const src = ctx.createMediaElementSource(audioRef.current); const an = ctx.createAnalyser(); an.fftSize = 128; src.connect(an); an.connect(ctx.destination); audioCtxRef.current = ctx; analyserRef.current = an; } catch {}
+    try { const Ctx = window.AudioContext || window.webkitAudioContext; const ctx = new Ctx(); const src = ctx.createMediaElementSource(audioRef.current); const an = ctx.createAnalyser(); an.fftSize = 1024; an.smoothingTimeConstant = 0.82; src.connect(an); an.connect(ctx.destination); audioCtxRef.current = ctx; analyserRef.current = an; } catch {}
   }
 
   /* ---- visualizer (only animates while playing; idle = flat, no loop) ---- */
@@ -156,7 +156,22 @@ function App() {
       if (!data || data.length !== an.frequencyBinCount) data = new Uint8Array(an.frequencyBinCount);
       an.getByteFrequencyData(data);
       const span = bigViz ? 260 : 130;   // taller bars when the visualizer is enlarged
-      for (let i = 0; i < bars.length; i++) bars[i].style.height = (10 + (data[i % data.length] / 255) * span) + 'px';
+      // Map bars across the spectrum on a LOG scale (how we hear pitch) so every bar
+      // covers a real frequency band — otherwise all the energy piles into the low
+      // bins and the right-hand bars never move. Take each band's peak, lift the
+      // quieter highs a touch so they stay lively.
+      const n = bars.length, bins = data.length;
+      const minB = 2, maxB = Math.max(minB + 1, Math.floor(bins * 0.66));   // skip DC + near-silent top
+      const ratio = maxB / minB;
+      for (let i = 0; i < n; i++) {
+        const lo = Math.floor(minB * Math.pow(ratio, i / n));
+        let hi = Math.floor(minB * Math.pow(ratio, (i + 1) / n));
+        if (hi <= lo) hi = lo + 1;
+        let peak = 0;
+        for (let j = lo; j < hi && j < bins; j++) if (data[j] > peak) peak = data[j];
+        const v = Math.min(1, (peak / 255) * (1 + (i / n) * 0.65));
+        bars[i].style.height = (10 + v * span) + 'px';
+      }
     };
     raf = requestAnimationFrame(draw);
     return () => cancelAnimationFrame(raf);
