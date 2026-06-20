@@ -4,7 +4,9 @@ A cute black / pink / yellow **desktop music player built just for [Suno AI](htt
 Browse Suno, pick the songs you love, and they drop straight into your own offline-capable
 library — wrapped in a soft, animated, kawaii interface.
 
-> Windows desktop app · fully local · open source · no account, no server, no tracking.
+> Windows desktop app · runs entirely on your own PC · open source.
+> **The app has no account of its own and never sends anything to the developer.**
+> *(In the Explore tab you sign into **your own** Suno account — that part is strictly between you and Suno, exactly like using suno.com in a browser.)*
 
 ---
 
@@ -12,8 +14,8 @@ library — wrapped in a soft, animated, kawaii interface.
 
 - **🌹 Built-in Suno browser ("Explore").** Suno opens *inside* the app. Log in once and it's
   remembered. Hit **🎯 Pick songs**, then click any song right in the page to add it to your library.
-  No copy-pasting, no scraping — you pick exactly what you want.
-- **🔗 Paste-a-link import.** Got a Suno link or song id? Paste it and it's added instantly.
+  No copy-pasting, no scraping — you pick exactly what you want. *(You log in with **your own**
+  Suno account, and the session is remembered — just like signing into suno.com normally.)*
 - **🎧 A real music player.** Play / pause, next / prev, **shuffle**, **repeat (all / one)**,
   draggable seek + volume, and a glowing **audio-reactive visualizer** that dances to the music.
 - **🎚️ 3-band Equalizer** with presets (Bass boost, Vocal, Treble, Warm, Lo-fi…). The visualizer
@@ -42,7 +44,7 @@ library — wrapped in a soft, animated, kawaii interface.
 | **Offline** | Cache your whole library, play with zero internet | Usually needs to be online |
 | **Songwriting** | Built-in AI lyric / style / title generator | Not included |
 | **Streamers** | OBS now-playing overlay out of the box | Not included |
-| **Your data** | 100% local, no account, no telemetry, open source | Often cloud / account-based |
+| **Your data** | Stored only on your PC; the app has no account & no telemetry; open source | Often cloud / account-based |
 | **Respectful** | No background scraping — you manually pick songs | — |
 
 It's basically a **cozy personal Suno jukebox** that also helps you *make* songs and *stream* them —
@@ -98,10 +100,13 @@ the *only* files that can touch your computer or the network:
 - `api.deepseek.com` — **only** if you open the "Create" tab and add your own key.
 - Google Fonts — for the cute fonts (with system-font fallback, so it works offline too).
 
-There's **no analytics, no telemetry, and no account.** Your Suno login stays inside the app's own
-session and is never sent anywhere except Suno itself. (See the project's security history for the
-hardening that enforces this.) Prefer to verify before trusting? Read `main.js` top to bottom — it's
-commented throughout.
+There's **no analytics, no telemetry, and no app account** — the developer receives nothing. Your
+Suno login stays inside the app's own session and is never sent anywhere except Suno itself. (See the
+project's security history for the hardening that enforces this.) Prefer to verify before trusting?
+Read `main.js` top to bottom — it's commented throughout.
+
+See **[`PRIVACY.md`](PRIVACY.md)** for the full privacy policy and **[`TERMS.md`](TERMS.md)** for the
+terms of use.
 
 ---
 
@@ -116,10 +121,19 @@ If you enjoy it, say hi to Feris: **https://mez.ink/ferisooo** 🌸
 
 ---
 
-## 📄 License
+## 📄 License, Terms & Privacy
 
-Released under the **MIT License** — see [`LICENSE`](LICENSE). Free to use, share, and modify.
+Released under the **MIT License** — see [`LICENSE`](LICENSE).
 
-> Not affiliated with or endorsed by Suno. "Suno" belongs to its respective owners. This is a fan-made
-> player for songs you have access to.
+**Forks & modified versions are welcome and explicitly allowed** — you may freely fork, change, and
+redistribute this app, **as long as you keep the MIT license notice and credit the original idea &
+design to Feris ([@ferisooo](https://github.com/ferisooo)) and the engineering work to Claude
+(Anthropic)** in your project's README / About / credits. See [`TERMS.md`](TERMS.md) for details.
+
+- 📃 **Terms of use:** [`TERMS.md`](TERMS.md)
+- 🔒 **Privacy policy:** [`PRIVACY.md`](PRIVACY.md)
+
+> Not affiliated with, sponsored by, or endorsed by Suno, Anthropic, DeepSeek, Google, GitHub, or OBS.
+> "Suno" and all other names/logos belong to their respective owners. This is an independent, fan-made
+> player for songs you have the right to access. **Use it in accordance with Suno's Terms of Service.**
 </content>
