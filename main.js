@@ -110,28 +110,33 @@ ipcMain.handle('obs:open', () => { shell.openPath(obsDir()); return true; });
    we serve the same now-playing card over http://127.0.0.1:PORT/. Paste that URL into LIVE
    Studio → Add → Browser. The background is transparent (LIVE Studio keeps the alpha), so no
    chroma key is needed. It polls /nowplaying.js once a second and updates live.            */
+const TIKTOK_PORT = 8787; // fixed so the overlay link is stable: http://127.0.0.1:8787/
 let tiktokServer = null;
 let tiktokPort = 0;
+function tiktokHandler(req, res) {
+  const route = (req.url || '/').split('?')[0];
+  if (route === '/nowplaying.js') {
+    res.writeHead(200, { 'Content-Type': 'application/javascript; charset=utf-8', 'Cache-Control': 'no-store', 'Access-Control-Allow-Origin': '*' });
+    res.end('window.__NOWPLAYING__ = ' + JSON.stringify(nowPlaying) + ';');
+    return;
+  }
+  if (route === '/' || route === '/overlay.html' || route === '/tiktok.html') {
+    res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' });
+    res.end(TIKTOK_OVERLAY_HTML);
+    return;
+  }
+  res.writeHead(404, { 'Content-Type': 'text/plain' });
+  res.end('not found');
+}
 function startTiktokServer() {
   if (tiktokServer) return;
-  tiktokServer = http.createServer((req, res) => {
-    const route = (req.url || '/').split('?')[0];
-    if (route === '/nowplaying.js') {
-      res.writeHead(200, { 'Content-Type': 'application/javascript; charset=utf-8', 'Cache-Control': 'no-store', 'Access-Control-Allow-Origin': '*' });
-      res.end('window.__NOWPLAYING__ = ' + JSON.stringify(nowPlaying) + ';');
-      return;
-    }
-    if (route === '/' || route === '/overlay.html' || route === '/tiktok.html') {
-      res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' });
-      res.end(TIKTOK_OVERLAY_HTML);
-      return;
-    }
-    res.writeHead(404, { 'Content-Type': 'text/plain' });
-    res.end('not found');
-  });
-  // bind to loopback only; port 0 lets the OS pick a free port
-  tiktokServer.on('error', () => { tiktokServer = null; tiktokPort = 0; });
-  tiktokServer.listen(0, '127.0.0.1', () => { try { tiktokPort = tiktokServer.address().port; } catch { tiktokPort = 0; } });
+  // bind to loopback only; prefer the fixed port, fall back to an OS-picked one if it's taken
+  const listen = (port, allowFallback) => {
+    const srv = http.createServer(tiktokHandler);
+    srv.on('error', () => { if (allowFallback) listen(0, false); else { tiktokServer = null; tiktokPort = 0; } });
+    srv.listen(port, '127.0.0.1', () => { tiktokServer = srv; try { tiktokPort = srv.address().port; } catch { tiktokPort = 0; } });
+  };
+  listen(TIKTOK_PORT, true);
 }
 ipcMain.handle('tiktok:url', () => (tiktokPort ? 'http://127.0.0.1:' + tiktokPort + '/' : ''));
 
